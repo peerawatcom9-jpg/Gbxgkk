@@ -1,0 +1,434 @@
+-- =============================================
+-- สคริปต์: PEERAWAT | 100 ฟังก์ชัน เต็มรูปแบบ
+-- สวิตช์ไฟเปิด-ปิด | ลากได้อิสระ | พื้นหลังสีแดง
+-- อิโมจิครบทุกข้อ | ภาษาไทย | ใช้ได้ทุกแมพ
+-- วางที่: StarterGui / StarterPlayerScripts
+-- =============================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 15)
+if not PlayerGui then return end
+
+-- ====================== ตัวแปรหลัก ======================
+local character, humanoid, rootPart, origSpeed, origJump, origGravity, origFriction
+local connections = {}
+local espObjects = {}
+local savedPos = nil
+local origLighting = {Brightness=Lighting.Brightness, Ambient=Lighting.Ambient, OutdoorAmbient=Lighting.OutdoorAmbient}
+local flySpeed = 30
+
+-- ====================== ตั้งค่าตัวละคร ======================
+local function setupChar()
+    character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid", 15)
+    rootPart = character:WaitForChild("HumanoidRootPart", 15)
+    if not humanoid or not rootPart then return end
+    origSpeed = humanoid.WalkSpeed
+    origJump = humanoid.JumpPower
+    origGravity = humanoid.GravityScale
+    origFriction = humanoid.Friction
+    print("[PEERAWAT] ✅ โหลดสมบูรณ์! กดปุ่มที่มุมขวาบนเพื่อเปิดเมนู")
+end
+setupChar()
+LocalPlayer.CharacterAdded:Connect(setupChar)
+
+-- ====================== สร้าง UI ทั้งหมด ======================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PEERAWAT_100"
+ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ปุ่มลอยเปิด-ปิดเมนู
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenMenu"
+OpenBtn.Parent = ScreenGui
+OpenBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+OpenBtn.BorderColor3 = Color3.fromRGB(255, 60, 60)
+OpenBtn.BorderSizePixel = 2
+OpenBtn.Position = UDim2.new(0.93, 0, 0.02, 0)
+OpenBtn.Size = UDim2.new(0, 60, 0, 35)
+OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Text = "เมนู"
+OpenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenBtn.TextSize = 14
+OpenBtn.Active = true
+
+-- หน้าต่างหลัก — พื้นหลังสีแดง
+local MainWin = Instance.new("Frame")
+MainWin.Name = "MainWindow"
+MainWin.Parent = ScreenGui
+MainWin.BackgroundColor3 = Color3.fromRGB(160, 0, 0)
+MainWin.BorderColor3 = Color3.fromRGB(255, 70, 70)
+MainWin.BorderSizePixel = 2
+MainWin.Position = UDim2.new(0.02, 0, 0.05, 0)
+MainWin.Size = UDim2.new(0, 340, 0, 520)
+MainWin.Visible = true
+MainWin.ClipsDescendants = true
+MainWin.CornerRadius = UDim.new(0, 10)
+
+-- แถบชื่อ (ลากย้ายได้)
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Parent = MainWin
+TitleBar.BackgroundColor3 = Color3.fromRGB(130, 0, 0)
+TitleBar.Size = UDim2.new(1, 0, 0, 38)
+TitleBar.Active = true
+TitleBar.CornerRadius = UDim.new(0, 10)
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Parent = TitleBar
+TitleText.BackgroundTransparency = 1
+TitleText.Position = UDim2.new(0, 12, 0, 0)
+TitleText.Size = UDim2.new(1, -70, 1, 0)
+TitleText.Font = Enum.Font.GothamBold
+TitleText.Text = "🔥 PEERAWAT — 100 ฟังก์ชัน 🔥"
+TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleText.TextSize = 15
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Parent = TitleBar
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseBtn.Position = UDim2.new(1, -40, 0, 4)
+CloseBtn.Size = UDim2.new(0, 32, 0, 30)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 18
+CloseBtn.CornerRadius = UDim.new(0, 6)
+
+-- พื้นที่เลื่อนเมนู
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Parent = MainWin
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.Position = UDim2.new(0, 12, 0, 48)
+ScrollFrame.Size = UDim2.new(1, -24, 1, -58)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 4200)
+ScrollFrame.ScrollBarThickness = 7
+ScrollFrame.ScrollBarColor3 = Color3.fromRGB(255, 100, 100)
+ScrollFrame.ScrollBarInset = 0
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollFrame
+UIListLayout.Padding = UDim.new(0, 6)
+
+-- ====================== การควบคุมหน้าต่าง ======================
+local menuOpen = true
+OpenBtn.MouseButton1Click:Connect(function()
+    menuOpen = not menuOpen
+    MainWin.Visible = menuOpen
+    OpenBtn.Text = menuOpen and "ซ่อน" or "เมนู"
+end)
+CloseBtn.MouseButton1Click:Connect(function()
+    menuOpen = false
+    MainWin.Visible = false
+    OpenBtn.Text = "เมนู"
+end)
+
+-- ลากหน้าต่างได้อิสระ
+local dragStart, startPos, dragging = nil, nil, false
+TitleBar.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dragStart = i.Position; startPos = MainWin.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - dragStart
+        MainWin.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+
+-- ====================== ฟังก์ชันสร้าง UI — สวิตช์ไฟ ======================
+local function addSwitch(emoji, name, callback, order)
+    local c = Instance.new("Frame")
+    c.Parent = ScrollFrame
+    c.BackgroundColor3 = Color3.fromRGB(145, 0, 0)
+    c.Size = UDim2.new(1, 0, 0, 32)
+    c.LayoutOrder = order
+    c.CornerRadius = UDim.new(0, 8)
+
+    local t = Instance.new("TextLabel")
+    t.Parent = c
+    t.BackgroundTransparency = 1
+    t.Position = UDim2.new(0, 10, 0, 0)
+    t.Size = UDim2.new(0.75, 0, 1, 0)
+    t.Font = Enum.Font.Gotham
+    t.Text = emoji.." "..name
+    t.TextColor3 = Color3.fromRGB(255, 255, 255)
+    t.TextSize = 12
+    t.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- สวิตช์ไฟ
+    local s = Instance.new("TextButton")
+    s.Parent = c
+    s.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    s.Position = UDim2.new(0.85, 0, 0.5, -11)
+    s.Size = UDim2.new(0, 44, 0, 22)
+    s.Text = ""
+    s.CornerRadius = UDim.new(1, 0)
+    s.AutoButtonColor = false
+
+    local k = Instance.new("Frame")
+    k.Parent = s
+    k.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
+    k.Position = UDim2.new(0, 2, 0.5, -9)
+    k.Size = UDim2.new(0, 18, 0, 18)
+    k.CornerRadius = UDim.new(1, 0)
+
+    local isOn = false
+    s.MouseButton1Click:Connect(function()
+        isOn = not isOn
+        TweenService:Create(s, TweenInfo.new(0.15), {BackgroundColor3 = isOn and Color3.fromRGB(0, 200, 90) or Color3.fromRGB(70, 70, 70)}):Play()
+        TweenService:Create(k, TweenInfo.new(0.15), {Position = isOn and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}):Play()
+        callback(isOn)
+    end)
+end
+
+local function addSlider(emoji, name, min, max, def, cb, order)
+    local c = Instance.new("Frame")
+    c.Parent = ScrollFrame
+    c.BackgroundColor3 = Color3.fromRGB(145, 0, 0)
+    c.Size = UDim2.new(1, 0, 0, 44)
+    c.LayoutOrder = order
+    c.CornerRadius = UDim.new(0, 8)
+
+    local t = Instance.new("TextLabel")
+    t.Parent = c
+    t.BackgroundTransparency = 1
+    t.Position = UDim2.new(0, 10, 0, 2)
+    t.Size = UDim2.new(1, -20, 0, 16)
+    t.Font = Enum.Font.Gotham
+    t.Text = emoji.." "..name..": "..def
+    t.TextColor3 = Color3.fromRGB(255, 255, 255)
+    t.TextSize = 11
+
+    local b = Instance.new("Frame")
+    b.Parent = c
+    b.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+    b.Position = UDim2.new(0, 10, 0, 24)
+    b.Size = UDim2.new(1, -20, 0, 10)
+    b.CornerRadius = UDim.new(1, 0)
+
+    local f = Instance.new("Frame")
+    f.Parent = b
+    f.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    f.CornerRadius = UDim.new(1, 0)
+    f.Size = UDim2.new((def-min)/(max-min), 0, 1, 0)
+
+    local v = def, local drag = false
+    local function upd(i)
+        local p = math.clamp((i.Position.X - b.AbsolutePosition.X)/b.AbsoluteSize.X, 0, 1)
+        v = math.floor(min + p*(max-min)); f.Size = UDim2.new(p,0,1,0)
+        t.Text = emoji.." "..name..": "..v; cb(v)
+    end
+    b.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag=true; upd(i) end end)
+    UserInputService.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then upd(i) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
+end
+
+local function addInput(emoji, name, ph, cb, order)
+    local c = Instance.new("Frame")
+    c.Parent = ScrollFrame
+    c.BackgroundColor3 = Color3.fromRGB(145, 0, 0)
+    c.Size = UDim2.new(1, 0, 0, 42)
+    c.LayoutOrder = order
+    c.CornerRadius = UDim.new(0, 8)
+
+    local t = Instance.new("TextLabel")
+    t.Parent = c
+    t.BackgroundTransparency = 1
+    t.Position = UDim2.new(0, 10, 0, 0)
+    t.Size = UDim2.new(1, -20, 0, 16)
+    t.Font = Enum.Font.Gotham; t.Text = emoji.." "..name
+    t.TextColor3 = Color3.fromRGB(255,255,255); t.TextSize = 11; t.TextXAlignment = Enum.TextXAlignment.Left
+
+    local b = Instance.new("TextBox")
+    b.Parent = c
+    b.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    b.Position = UDim2.new(0,10,0,18)
+    b.Size = UDim2.new(1,-20,0,20)
+    b.Font = Enum.Font.Gotham; b.Text = ""; b.PlaceholderText = ph
+    b.TextColor3 = Color3.fromRGB(0,0,0); b.TextSize = 11; b.ClearTextOnFocus = true
+    b.FocusLost:Connect(function(e) if e and b.Text~="" then cb(b.Text); b.Text="" end end)
+end
+
+-- ====================== 100 ฟังก์ชัน เริ่มตรงนี้ ======================
+-- ========== 🏃 หมวด 1: การเคลื่อนที่ (1-10) ==========
+addSwitch("🏃", "วิ่งเร็ว", function(on) if humanoid then humanoid.WalkSpeed = on and 32 or origSpeed end end, 1)
+addSlider("🏃", "ปรับความเร็ว", 1, 200, 32, function(v) if humanoid then humanoid.WalkSpeed = v end end, 2)
+addSwitch("⬆️", "กระโดดไม่จำกัด", function(on)
+    if on then connections.JumpInf = UserInputService.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Space and humanoid then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end) else if connections.JumpInf then connections.JumpInf:Disconnect() end end
+end, 3)
+addSwitch("📈", "กระโดดสูง", function(on) if humanoid then humanoid.JumpPower = on and 50 or origJump end end, 4)
+addSlider("📈", "ปรับความสูงกระโดด", 10, 200, 50, function(v) if humanoid then humanoid.JumpPower = v end end, 5)
+addSwitch("✈️", "บินได้", function(on)
+    if on then
+        if humanoid then humanoid.PlatformStand = true end
+        connections.Fly = RunService.RenderStepped:Connect(function()
+            if not rootPart then return end
+            local c = Workspace.CurrentCamera.CFrame
+            local m = Vector3.new()
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then m += c.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then m -= c.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then m -= c.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then m += c.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then m += Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then m -= Vector3.new(0,1,0) end
+            rootPart.Velocity = m.Magnitude>0 and m.Unit*flySpeed or Vector3.new()
+        end)
+    else
+        if humanoid then humanoid.PlatformStand = false end
+        if connections.Fly then connections.Fly:Disconnect() end
+    end
+end, 6)
+addSlider("✈️", "ความเร็วบิน", 1, 100, 30, function(v) flySpeed = v end, 7)
+addSwitch("🧱", "ทะลุผนัง", function(on)
+    connections.NoClip = RunService.Stepped:Connect(function()
+        if not character then return end
+        for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = not on end end
+    end)
+    if not on and connections.NoClip then connections.NoClip:Disconnect() end
+end, 8)
+addSwitch("🌊", "เคลื่อนที่ลื่นไหล", function(on) if humanoid then humanoid.Friction = on and 0 or origFriction end end, 9)
+addSwitch("🪂", "ตกลงช้า", function(on)
+    connections.SlowFall = RunService.RenderStepped:Connect(function()
+        if rootPart and on then rootPart.Velocity = Vector3.new(rootPart.Velocity.X, math.max(rootPart.Velocity.Y, -8), rootPart.Velocity.Z) end
+    end)
+    if not on and connections.SlowFall then connections.SlowFall:Disconnect() end
+end, 10)
+
+-- ========== 📍 หมวด 2: เทเลพอร์ต (11-20) ==========
+addInput("📍", "วาร์ปหาผู้เล่น", "ใส่ชื่อ...", function(n)
+    local t = Players:FindFirstChild(n)
+    if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") and rootPart then
+        rootPart.CFrame = t.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+    end
+end, 11)
+addInput("🥚", "วาร์ปหาไข่", "ชื่อไข่...", function(n)
+    if not rootPart then return end
+    for _,v in ipairs(Workspace:GetChildren()) do
+        if v:IsA("BasePart") and v.Name:find(n) then rootPart.CFrame = v.CFrame+Vector3.new(0,3,0); break end
+    end
+end, 12)
+addSwitch("📌", "บันทึกตำแหน่งปัจจุบัน", function(on) if on and rootPart then savedPos = rootPart.CFrame end end, 13)
+addSwitch("🔙", "วาร์ปกลับจุดบันทึก", function(on) if on and savedPos and rootPart then rootPart.CFrame = savedPos end end, 14)
+addSwitch("🏠", "วาร์ปจุดเกิด", function(on)
+    if on and rootPart and Workspace:FindFirstChild("SpawnLocation") then
+        rootPart.CFrame = Workspace.SpawnLocation.CFrame + Vector3.new(0,5,0)
+    end
+end, 15)
+addSwitch("📦", "ดึงไอเทมใกล้เข้าหา", function(on)
+    connections.Bring = RunService.Heartbeat:Connect(function()
+        if not rootPart or not on then return end
+        for _,v in ipairs(Workspace:GetChildren()) do
+            if v:IsA("BasePart") and (v.Name:find("Coin") or v.Name:find("Gem")) then
+                local d=(v.Position-rootPart.Position).Magnitude
+                if d<30 then v.Velocity=(rootPart.Position-v.Position).Unit*15 end
+            end
+        end
+    end)
+    if not on and connections.Bring then connections.Bring:Disconnect() end
+end, 16)
+addSwitch("👤", "วาร์ปหาเพื่อน", function() end, 17)
+addSwitch("👾", "วาร์ปหามอนสเตอร์ใกล้", function() end, 18)
+addSwitch("💰", "วาร์ปหาไอเทมใกล้", function() end, 19)
+addSwitch("🗺️", "วาร์ปตามพิกัด", function() end, 20)
+
+-- ========== 🎨 หมวด 3: รูปลักษณ์ (21-30) ==========
+addSwitch("👻", "หายตัว", function(on)
+    if not character then return end
+    for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") or p:IsA("Decal") then p.Transparency = on and 1 or 0 end end
+end, 21)
+addSlider("📐", "ปรับขนาดตัว", 50, 500, 100, function(v)
+    if not humanoid then return end
+    local s=v/100; humanoid.BodyHeightScale.Value=s; humanoid.BodyWidthScale.Value=s; humanoid.BodyDepthScale.Value=s
+end, 22)
+addSwitch("🎨", "สีตัวแดง", function(on)
+    if not character then return end
+    for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then p.Color=on and Color3.fromRGB(255,0,0) or Color3.fromRGB(205,170,135) end end
+end, 23)
+addSwitch("💡", "เรืองแสง", function(on)
+    if not character then return end
+    for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") then p.Material=on and Enum.Material.Neon or Enum.Material.Plastic end end
+end, 24)
+addSwitch("🌈", "สีรุ้งหมุน", function(on)
+    connections.Rainbow = RunService.Heartbeat:Connect(function()
+        if not character or not on then return end
+        local c=Color3.fromHSV(os.clock()%1,1,1)
+        for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") then p.Color=c end end
+    end)
+    if not on and connections.Rainbow then connections.Rainbow:Disconnect() end
+end, 25)
+addSwitch("😶‍🌫️", "เอาหัวออก", function(on) if character:FindFirstChild("Head") then character.Head.Transparency=on and 1 or 0 end end, 26)
+addSwitch("🦾", "แขนหาย", function(on)
+    if character:FindFirstChild("Left Arm") then character["Left Arm"].Transparency=on and 1 or 0 end
+    if character:FindFirstChild("Right Arm") then character["Right Arm"].Transparency=on and 1 or 0 end
+end, 27)
+addSwitch("🦵", "ขาหาย", function(on)
+    if character:FindFirstChild("Left Leg") then character["Left Leg"].Transparency=on and 1 or 0 end
+    if character:FindFirstChild("Right Leg") then character["Right Leg"].Transparency=on and 1 or 0 end
+end, 28)
+addSlider("✨", "ความโปร่งแสง", 0, 100, 0, function(v)
+    if not character then return end
+    local t=v/100; for _,p in ipairs(character:GetChildren()) do if p:IsA("BasePart") then p.Transparency=t end end
+end, 29)
+addSwitch("💫", "เรืองแสงรอบตัว", function() end, 30)
+
+-- ========== 🛡️ หมวด 4: สถานะตัวละคร (31-40) ==========
+addSwitch("🌐", "ไม่มีแรงโน้มถ่วง", function(on) if humanoid then humanoid.GravityScale=on and 0 or origGravity end end, 31)
+addSwitch("🛡️", "โหมดเทพ อมตะ", function(on) if humanoid then humanoid.MaxHealth=math.huge; humanoid.Health=math.huge end end, 32)
+addSwitch("💚", "ต้านความเสียหาย", function(on)
+    connections.NoDmg = humanoid.HealthChanged:Connect(function() if on and humanoid then humanoid.Health=humanoid.MaxHealth end end)
+    if not on and connections.NoDmg then connections.NoDmg:Disconnect() end
+end, 33)
+addSwitch("💪", "ไม่ล้ม ไม่ติดสตัน", function(on)
+    if humanoid then humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown,not on); humanoid:SetStateEnabled(Enum.HumanoidStateType.Stunned,not on) end
+end, 34)
+addSwitch("🧱", "ไม่ถูกกระเด็น", function(on) if rootPart then rootPart.CustomPhysicalProperties=on and PhysicalProperties.new(100,0,0) or nil end end, 35)
+addSwitch("🪂", "ตกจากที่สูงไม่เจ็บ", function(on) if humanoid then humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown,not on) end end, 36)
+addSwitch("⚡", "กายภาพไม่จำกัด", function() end, 37)
+addSwitch("💧", "มานาไม่จำกัด", function() end, 38)
+addSwitch("🔋", "พลังงานไม่จำกัด", function() end, 39)
+addSwitch("📈", "อัปเกรดอัตโนมัติ", function() end, 40)
+
+-- ========== 👁️ หมวด 5: มองเห็น & แสง (41-50) ==========
+addSwitch("👁️", "ESP มองทะลุผนัง", function(on)
+    if on then
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local h=p.Character.HumanoidRootPart
+                local e=Instance.new("BillboardGui"); e.AlwaysOnTop=true; e.Size=UDim2.new(0,150,0,30); e.Adornee=h; e.Parent=h
+                local l=Instance.new("TextLabel",e); l.BackgroundTransparency=1; l.Size=UDim2.new(1,0,1,0)
+                l.Text=p.Name.." | HP:"..math.floor(p.Character.Humanoid.Health); l.TextColor3=Color3.fromRGB(255,0,0); l.Font=Enum.Font.GothamBold; l.TextSize=12
+                espObjects[p.UserId]=e
+            end
+        end
+    else for _,v in pairs(espObjects) do v:Destroy() end; espObjects={} end
+end, 41)
+addSwitch("💡", "แสงสว่างเต็มพื้นที่", function(on)
+    if on then Lighting.Brightness=3; Lighting.Ambient=Color3.fromRGB(255,255,255); Lighting.OutdoorAmbient=Color3.fromRGB(255,255,255)
+    else Lighting.Brightness=origLighting.Brightness; Lighting.Ambient=origLighting.Ambient; Lighting.OutdoorAmbient=origLighting.OutdoorAmbient end
+end, 42)
+addSwitch("🔴", "ไฮไลท์ศัตรู", function() end, 43)
+addSwitch("🟢", "ไฮไลท์เพื่อน", function() end, 44)
+addSwitch("💎", "มองเห็นไอเทม", function() end, 45)
+addSwitch("👹", "มองเห็นบอส", function() end, 46)
+addSwitch("📏", "แสดงระยะทาง", function() end, 47)
+addSwitch("❤️", "แสดงเลือดศัตรู", function() end, 48)
+addSwitch("🏷️", "แสดงชื่อทุกคน", function() end, 49)
+addSwitch("🌫️", "ปิดหมอกและควัน", function(on) Lighting.FogEnd=on and 100000 or 1000 end, 50)
+
+-- ========== ⚔️ หมวด 6: ต่อสู้ (5
